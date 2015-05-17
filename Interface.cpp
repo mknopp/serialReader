@@ -72,7 +72,7 @@ void Interface::readData() {
 		}
 	}
 	if (!lineFinished) {
-		std::cerr << CURR_TIME_STRING << "Couldn't read a complete line, waiting for next read\n";
+		//std::cerr << CURR_TIME_STRING << "Couldn't read a complete line, waiting for next read\n";
 		return;
 	}
 
