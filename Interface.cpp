@@ -5,6 +5,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QList>
+#include <QProcess>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStringList>
@@ -15,9 +16,9 @@
 
 #define CURR_TIME_STRING QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss: ").toStdString()
 
-Interface::Interface(QObject *parent) :
-		QObject(parent),
-		portName("/dev/ttyUSB0") {
+Interface::Interface(QObject *parent) : QObject(parent) {
+	QString portName = settings.value("port/device", "/dev/ttyUSB0").toString();
+
 	pSettings.BaudRate = BAUD115200;
 	pSettings.DataBits = DATA_8;
 	pSettings.Parity = PAR_NONE;
@@ -29,8 +30,6 @@ Interface::Interface(QObject *parent) :
 	if (!serialPort->open(QextSerialPort::ReadOnly)) {
 		qCritical() << "Failed to open serial port";
 		exit(-1);
-
-	rrdProcess = new QProcess(this);
 	}
 }
 
@@ -49,13 +48,17 @@ void Interface::readData() {
 
 	qint64 avail = serialPort->bytesAvailable();
 
-	// -1 bytes are returned when an error occurred, this usually means the USB devices was disconnected
+	// -1 bytes are returned when an error occurred, this usually means the USB
+	// device was disconnected
 	if (avail < 0) {
-		std::cerr << CURR_TIME_STRING << "serial read failed; reinitializing ...\n";
+		std::cerr << CURR_TIME_STRING
+			<< "serial read failed; reinitializing ...\n";
 		serialPort->close();
 		sleep(10);
 		while (!serialPort->open(QextSerialPort::ReadOnly)) {
-			std::cerr << "Waiting 10 seconds for " << portName.toStdString() << " to become ready.\n";
+			std::cerr << "Waiting 10 seconds for "
+				<< serialPort->portName().toStdString()
+				<< " to become ready.\n";
 			sleep(10);
 		}
 		return;
@@ -63,7 +66,8 @@ void Interface::readData() {
 
 	bytes.resize(avail);
 
-	// Check if there is a complete line in the input buffer and wait for new data otherwise
+	// Check if there is a complete line in the input buffer;
+	// wait for new data otherwise
 	serialPort->peek(bytes.data(), bytes.size());
 	bool lineFinished = false;
 	for (int i=0; i<bytes.size(); ++i) {
@@ -73,7 +77,8 @@ void Interface::readData() {
 		}
 	}
 	if (!lineFinished) {
-		//std::cerr << CURR_TIME_STRING << "Couldn't read a complete line, waiting for next read\n";
+		//std::cerr << CURR_TIME_STRING
+		//	<< "Couldn't read a complete line, waiting for next read\n";
 		return;
 	}
 
@@ -92,43 +97,23 @@ void Interface::readData() {
 	}
 
 	if (gammaOk && pressureOk) {
+		// The unit is broken and returns a second (empty) result imidiately
+		// after the first one, so we ignore it here
 		if (measuredValue > 20 && pressure > 800) {
 			std::cout << CURR_TIME_STRING << "Storing measured values "
-					<< measuredValue << " nGy/h and " << pressure << " hPa into database." << std::endl;
-			QSqlDatabase database = QSqlDatabase::addDatabase("QMYSQL", "log");
-			database.setHostName("database.home.h2o");
-			database.setDatabaseName("gamma_measurement");
-			database.setUserName("router");
-			database.setPassword("CH3COO-");
+				<< measuredValue << " nGy/h and " << pressure
+				<< " hPa into database." << std::endl;
 
-			if (!database.open())
-				qCritical() << "Failed to establish database connection:" << database.lastError().text();
-
-			if (rrdProcess->state() == QProcess::Running)
-				rrdProcess->kill();
-
-			rrdProcess->setProcessChannelMode(QProcess::ForwardedChannels);
-			connect(rrdProcess, SIGNAL(finished(int)), this, SLOT(rrdProcessFinished(int)));
-
-			QStringList arguments;
-			arguments << "update" << "/home/gamma/gamma.rrd" << QString("N:%1:%2").arg(measuredValue).arg(pressure);
-			qDebug() << "About to execute rrdtool" << arguments;
-			rrdProcess->start("rrdtool", arguments);
-
-			QSqlQuery query(database);
-			query.prepare("INSERT INTO log (date, value, pressure) VALUES ( NOW(), :value, :pressure)");
-			query.bindValue(":value", QVariant(measuredValue));
-			query.bindValue(":pressure", QVariant(pressure));
-			query.exec();
-
-			database.close();
-		} else
+			storeResultInDatabase(measuredValue, pressure);
+			updateRrdDatabase(measuredValue, pressure);
+		}
+		else
 			std::cout << CURR_TIME_STRING << "Ignoring measured values "
-				<< measuredValue << " nGy/h and " << pressure << " hPa." << std::endl;
-	} else
+				<< measuredValue << " nGy/h and " << pressure << " hPa."
+				<< std::endl;
+	}
+	else
 		std::cerr << CURR_TIME_STRING << bytes.constData();
-
-	QSqlDatabase::removeDatabase("log");
 }
 
 double Interface::getReducedAtmosphericPressure(double adout) const {
@@ -146,13 +131,57 @@ double Interface::getReducedAtmosphericPressure(double adout) const {
 
 	double Ehat = 18.2194 * (1.0463 - exp(-0.0666 * tempC));
 
-	return absolutePressure	* exp(g0 * altitude	/ (R * (tempC + 273.15 + Ch * Ehat + a * altitude / 2)));
+	return absolutePressure * exp(g0 * altitude /
+				(R * (tempC + 273.15 + Ch * Ehat + a * altitude / 2)));
+}
+
+void Interface::updateRrdDatabase(int gamma, double pressure) {
+	static QProcess *rrdProcess = Q_NULLPTR;
+
+	// We want to remove stale processes, so check that there is only one
+	if (rrdProcess == Q_NULLPTR)
+		rrdProcess = new QProcess(this);
+	else {
+		rrdProcess->kill();
+		delete rrdProcess;
+		rrdProcess = new QProcess(this);
+	}
+
+	rrdProcess->setProcessChannelMode(QProcess::ForwardedChannels);
+	connect(rrdProcess, SIGNAL(finished(int, QProcess::ExitStatus)),
+			this, SLOT(rrdProcessFinished(int)));
+
+	QStringList arguments;
+	arguments << "update" << "/home/gamma/gamma.rrd" << QString("N:%1:%2").arg(gamma).arg(pressure);
+	qDebug() << "About to execute rrdtool" << arguments;
+	rrdProcess->start("rrdtool", arguments);
+}
+
+void Interface::storeResultInDatabase(int gamma, double pressure) {
+	QSettings settings;
+	QSqlDatabase database = QSqlDatabase::addDatabase("QMYSQL", "log");
+
+	database.setHostName(settings.value("database/host").toString());
+	database.setDatabaseName(settings.value("database/database").toString());
+	database.setUserName(settings.value("database/username").toString());
+	database.setPassword(settings.value("database/password").toString());
+
+	if (!database.open())
+		qCritical() << "Failed to establish database connection:" << database.lastError().text();
+
+	QSqlQuery query(database);
+	query.prepare("INSERT INTO log (date, value, pressure) VALUES ( NOW(), :value, :pressure)");
+	query.bindValue(":value", QVariant(gamma));
+	query.bindValue(":pressure", QVariant(pressure));
+	query.exec();
+
+	database.close();
+
+	QSqlDatabase::removeDatabase("log");
 }
 
 void Interface::rrdProcessResult(int exitCode) {
 	if(exitCode != 0) {
 		qWarning() << "rrdTool exited with a non-zero exit code!";
 	}
-	delete rrdProcess;
-	rrdProcess = new QProcess(this);
 }
