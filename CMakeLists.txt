@@ -9,7 +9,7 @@ find_package(Qt5Core)
 find_package(Qt5Sql)
 ###### End Qt related part ######
 
-SET(SERIALREADER_SOURCES Interface.cpp serialReader.cpp qextserialport/src/qextserialport.cpp qextserialport/src/posix_qextserialport.cpp)
+SET(SERIALREADER_SOURCES Interface.cpp serialReader.cpp qextserialport/src/qextserialport.cpp qextserialport/src/qextserialport_unix.cpp)
 
 ADD_EXECUTABLE(${PROJECT_NAME} ${SERIALREADER_SOURCES})
 
