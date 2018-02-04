@@ -1,1 +1,5 @@
+.cproject
+.project
+.settings
 build/
+CMakeLists.txt.user
