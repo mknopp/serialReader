@@ -91,9 +91,9 @@ void Interface::readData() {
 	}
 
 	if (gammaOk && pressureOk) {
-		if (measuredValue > 80 && pressure > 900) {
+		if (measuredValue > 20 && pressure > 800) {
 			std::cout << CURR_TIME_STRING << "Storing measured values "
-					<< measuredValue << " nGy/h and " << pressure << " hPa into database.\n";
+					<< measuredValue << " nGy/h and " << pressure << " hPa into database." << std::endl;
 			QSqlDatabase database = QSqlDatabase::addDatabase("QMYSQL", "log");
 			database.setHostName("database.home.h2o");
 			database.setDatabaseName("gamma_measurement");
@@ -112,7 +112,7 @@ void Interface::readData() {
 			database.close();
 		} else
 			std::cout << CURR_TIME_STRING << "Ignoring measured values "
-				<< measuredValue << " nGy/h and " << pressure << " hPa.\n";
+				<< measuredValue << " nGy/h and " << pressure << " hPa." << std::endl;
 	} else
 		std::cerr << CURR_TIME_STRING << bytes.constData();
 
