@@ -1,3 +1,4 @@
+#include <QProcess>
 #include <QSqlDatabase>
 #include <QString>
 #include <QTimer>
@@ -15,9 +16,11 @@ class Interface: public QObject {
 	private:
 		PortSettings pSettings;
 		QextSerialPort *serialPort;
+		QProcess *rrdProcess;
 		QString portName;
 		double getReducedAtmosphericPressure(double adout) const;
 
 	private Q_SLOTS:
 		void readData();
+		void rrdProcessResult(int);
 };

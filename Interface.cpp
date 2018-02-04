@@ -7,14 +7,13 @@
 #include <QList>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QStringList>
 #include <QVariant>
 #include <unistd.h>
 
 #include "Interface.h"
 
 #define CURR_TIME_STRING QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss: ").toStdString()
-
-// TODO implement system daemon process so that we do not require screen
 
 Interface::Interface(QObject *parent) :
 		QObject(parent),
@@ -30,6 +29,8 @@ Interface::Interface(QObject *parent) :
 	if (!serialPort->open(QextSerialPort::ReadOnly)) {
 		qCritical() << "Failed to open serial port";
 		exit(-1);
+
+	rrdProcess = new QProcess(this);
 	}
 }
 
@@ -103,6 +104,17 @@ void Interface::readData() {
 			if (!database.open())
 				qCritical() << "Failed to establish database connection:" << database.lastError().text();
 
+			if (rrdProcess->state() == QProcess::Running)
+				rrdProcess->kill();
+
+			rrdProcess->setProcessChannelMode(QProcess::ForwardedChannels);
+			connect(rrdProcess, SIGNAL(finished(int)), this, SLOT(rrdProcessFinished(int)));
+
+			QStringList arguments;
+			arguments << "update" << "/home/gamma/gamma.rrd" << QString("N:%1:%2").arg(measuredValue).arg(pressure);
+			qDebug() << "About to execute rrdtool" << arguments;
+			rrdProcess->start("rrdtool", arguments);
+
 			QSqlQuery query(database);
 			query.prepare("INSERT INTO log (date, value, pressure) VALUES ( NOW(), :value, :pressure)");
 			query.bindValue(":value", QVariant(measuredValue));
@@ -135,4 +147,12 @@ double Interface::getReducedAtmosphericPressure(double adout) const {
 	double Ehat = 18.2194 * (1.0463 - exp(-0.0666 * tempC));
 
 	return absolutePressure	* exp(g0 * altitude	/ (R * (tempC + 273.15 + Ch * Ehat + a * altitude / 2)));
+}
+
+void Interface::rrdProcessResult(int exitCode) {
+	if(exitCode != 0) {
+		qWarning() << "rrdTool exited with a non-zero exit code!";
+	}
+	delete rrdProcess;
+	rrdProcess = new QProcess(this);
 }
