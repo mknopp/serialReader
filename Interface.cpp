@@ -98,14 +98,17 @@ void Interface::readData() {
 
 	if (gammaOk && pressureOk) {
 		// The unit is broken and returns a second (empty) result imidiately
-		// after the first one, so we ignore it here
-		if (measuredValue > 20 && pressure > 800) {
+		// after the first one, so we do a simple sanity check here
+		if (measuredValue > 0 && pressure > 800) {
 			std::cout << CURR_TIME_STRING << "Storing measured values "
 				<< measuredValue << " nGy/h and " << pressure
 				<< " hPa into database." << std::endl;
 
 			storeResultInDatabase(measuredValue, pressure);
 			updateRrdDatabase(measuredValue, pressure);
+
+			// Clean up the database connection, has to be out of scope
+			QSqlDatabase::removeDatabase("log");
 		}
 		else
 			std::cout << CURR_TIME_STRING << "Ignoring measured values "
@@ -149,7 +152,7 @@ void Interface::updateRrdDatabase(int gamma, double pressure) {
 
 	rrdProcess->setProcessChannelMode(QProcess::ForwardedChannels);
 	connect(rrdProcess, SIGNAL(finished(int, QProcess::ExitStatus)),
-			this, SLOT(rrdProcessFinished(int)));
+			this, SLOT(rrdProcessResult(int)));
 
 	QStringList arguments;
 	arguments << "update" << "/home/gamma/gamma.rrd" << QString("N:%1:%2").arg(gamma).arg(pressure);
@@ -176,8 +179,6 @@ void Interface::storeResultInDatabase(int gamma, double pressure) {
 	query.exec();
 
 	database.close();
-
-	QSqlDatabase::removeDatabase("log");
 }
 
 void Interface::rrdProcessResult(int exitCode) {
