@@ -34,8 +34,13 @@ Interface::~Interface() {
 
 void Interface::start() {
 	connect(serialPort, SIGNAL(readyRead()), this, SLOT(readData()));
+#if QT_VERSION >= 0x050800
 	connect(serialPort, SIGNAL(errorOccurred(QSerialPort::SerialPortError)),
 			this, SLOT(handleSerialError(QSerialPort::SerialPortError)));
+#else
+	connect(serialPort, SIGNAL(error(QSerialPort::SerialPortError)),
+			this, SLOT(handleSerialError(QSerialPort::SerialPortError)));
+#endif
 }
 
 void Interface::readData() {
