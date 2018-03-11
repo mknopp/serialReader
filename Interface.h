@@ -20,6 +20,7 @@ class Interface: public QObject {
 		void storeResultInDatabase(int gamma, double pressure);
 
 	private Q_SLOTS:
+		void handleSerialError(QSerialPort::SerialPortError error);
 		void readData();
 		void rrdProcessResult(int);
 };

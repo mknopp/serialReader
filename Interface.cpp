@@ -34,6 +34,8 @@ Interface::~Interface() {
 
 void Interface::start() {
 	connect(serialPort, SIGNAL(readyRead()), this, SLOT(readData()));
+	connect(serialPort, SIGNAL(errorOccurred(QSerialPort::SerialPortError)),
+			this, SLOT(handleSerialError(QSerialPort::SerialPortError)));
 }
 
 void Interface::readData() {
@@ -41,22 +43,6 @@ void Interface::readData() {
 	QList<QByteArray> results;
 
 	qint64 avail = serialPort->bytesAvailable();
-
-	// -1 bytes are returned when an error occurred, this usually means the USB
-	// device was disconnected
-	if (avail < 0) {
-		std::cerr << CURR_TIME_STRING
-			<< "serial read failed; reinitializing ...\n";
-		serialPort->close();
-		sleep(10);
-		while (!serialPort->open(QSerialPort::ReadOnly)) {
-			std::cerr << "Waiting 10 seconds for "
-				<< serialPort->portName().toStdString()
-				<< " to become ready.\n";
-			sleep(10);
-		}
-		return;
-	}
 
 	bytes.resize(avail);
 
@@ -173,6 +159,21 @@ void Interface::storeResultInDatabase(int gamma, double pressure) {
 	query.exec();
 
 	database.close();
+}
+
+void Interface::handleSerialError(QSerialPort::SerialPortError error) {
+	if (error == QSerialPort::ReadError) {
+		std::cerr << CURR_TIME_STRING
+			<< "serial read failed; reinitializing ...\n";
+		serialPort->close();
+		sleep(3);
+		while (!serialPort->open(QSerialPort::ReadOnly)) {
+			std::cerr << "Waiting 3 seconds for "
+				<< serialPort->portName().toStdString()
+				<< " to become ready.\n";
+			sleep(3);
+		}
+	}
 }
 
 void Interface::rrdProcessResult(int exitCode) {
