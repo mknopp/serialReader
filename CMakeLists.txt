@@ -6,14 +6,16 @@ PROJECT (serialReader)
 ###### Begin Qt related part ######
 set(CMAKE_AUTOMOC ON)
 find_package(Qt5Core)
+find_package(Qt5SerialPort)
 find_package(Qt5Sql)
 ###### End Qt related part ######
 
-SET(SERIALREADER_SOURCES Interface.cpp serialReader.cpp qextserialport/src/qextserialport.cpp qextserialport/src/qextserialport_unix.cpp)
+SET(SERIALREADER_SOURCES Interface.cpp serialReader.cpp)
 
 ADD_EXECUTABLE(${PROJECT_NAME} ${SERIALREADER_SOURCES})
 
 TARGET_LINK_LIBRARIES(${PROJECT_NAME}
     Qt5::Core
+    Qt5::SerialPort
     Qt5::Sql
 )

@@ -19,15 +19,9 @@
 Interface::Interface(QObject *parent) : QObject(parent) {
 	QString portName = settings.value("port/device", "/dev/ttyUSB0").toString();
 
-	pSettings.BaudRate = BAUD115200;
-	pSettings.DataBits = DATA_8;
-	pSettings.Parity = PAR_NONE;
-	pSettings.StopBits = STOP_1;
-	pSettings.FlowControl = FLOW_OFF;
-	pSettings.Timeout_Millisec = 0;
-
-	serialPort = new QextSerialPort(portName, pSettings, QextSerialPort::EventDriven);
-	if (!serialPort->open(QextSerialPort::ReadOnly)) {
+	serialPort = new QSerialPort(portName, this);
+	serialPort->setBaudRate(QSerialPort::Baud115200);
+	if (!serialPort->open(QIODevice::ReadOnly)) {
 		qCritical() << "Failed to open serial port";
 		exit(-1);
 	}
@@ -55,7 +49,7 @@ void Interface::readData() {
 			<< "serial read failed; reinitializing ...\n";
 		serialPort->close();
 		sleep(10);
-		while (!serialPort->open(QextSerialPort::ReadOnly)) {
+		while (!serialPort->open(QSerialPort::ReadOnly)) {
 			std::cerr << "Waiting 10 seconds for "
 				<< serialPort->portName().toStdString()
 				<< " to become ready.\n";

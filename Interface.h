@@ -1,9 +1,8 @@
+#include <QSerialPort>
 #include <QSettings>
 #include <QSqlDatabase>
 #include <QString>
 #include <QTimer>
-
-#include "qextserialport/src/qextserialport.h"
 
 class Interface: public QObject {
 	Q_OBJECT
@@ -14,8 +13,7 @@ class Interface: public QObject {
 		void start();
 
 	private:
-		PortSettings pSettings;
-		QextSerialPort *serialPort;
+		QSerialPort *serialPort;
 		QSettings settings;
 		double getReducedAtmosphericPressure(double adout) const;
 		void updateRrdDatabase(int gamma, double pressure);
