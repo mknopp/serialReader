@@ -107,7 +107,7 @@ void Interface::readData() {
 double Interface::getReducedAtmosphericPressure(double adout) const {
 	// first convert the A/D readout to absolute pressure
 	// see MPX4115A datasheet, p. 6
-	double absolutePressure = 10 * (adout / 0x3ff + 0.095) / 0.009;
+	double absolutePressure = 10 * (adout / 50676.0 + 0.095) / 0.009;
 
 	// see http://de.wikipedia.org/wiki/Barometrische_H%C3%B6henformel#Reduktion_auf_Meeresh.C3.B6he
 	const double g0 = 9.80665;
