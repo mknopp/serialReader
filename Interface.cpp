@@ -58,6 +58,8 @@ void Interface::readData() {
 	for (int i=0; i<bytes.size(); ++i) {
 		if (bytes[i] == '\n') {
 			lineFinished = true;
+			// When does the first line break happen?
+			avail = i+1;
 			break;
 		}
 	}
@@ -67,6 +69,8 @@ void Interface::readData() {
 		return;
 	}
 
+	// Receiving more than one line is also an issue, so stop at the first '\n'
+	bytes.resize(avail);
 	serialPort->read(bytes.data(), bytes.size());
 
 	results = bytes.split(';');
@@ -107,7 +111,8 @@ void Interface::readData() {
 double Interface::getReducedAtmosphericPressure(double adout) const {
 	// first convert the A/D readout to absolute pressure
 	// see MPX4115A datasheet, p. 6
-	double absolutePressure = 10 * (adout / 50676.0 + 0.095) / 0.009;
+	double voltageFromSensor = adout/4096.0 * 2.90 + 3.36;
+	double absolutePressure = 10 * (voltageFromSensor / 5.04 + 0.095) / 0.009;
 
 	// see http://de.wikipedia.org/wiki/Barometrische_H%C3%B6henformel#Reduktion_auf_Meeresh.C3.B6he
 	const double g0 = 9.80665;
