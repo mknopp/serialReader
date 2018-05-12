@@ -75,25 +75,26 @@ void Interface::readData() {
 
 	results = bytes.split(';');
 
-	bool gammaOk = false, pressureOk = false;
+	bool gammaOk = false, pressureOk = false, alarmOk = false;
 	double adout, pressure;
-	int measuredValue;
+	int measuredValue, alarm;
 
-	if (results.length() >= 2) {
+	if (results.length() >= 3) {
 		measuredValue = results.at(0).simplified().toInt(&gammaOk);
 		adout = results.at(1).simplified().toDouble(&pressureOk);
 		pressure = getReducedAtmosphericPressure(adout);
+		alarm = results.at(2).simplified().toInt(&alarmOk);
 	}
 
-	if (gammaOk && pressureOk) {
+	if (gammaOk && pressureOk && alarmOk) {
 		// The unit is broken and returns a second (empty) result imidiately
 		// after the first one, so we do a simple sanity check here
 		if (measuredValue > 0 && pressure > 800) {
 			std::cout << CURR_TIME_STRING << "Storing measured values "
-				<< measuredValue << " nGy/h and " << pressure
-				<< " hPa into database." << std::endl;
+				<< measuredValue << " nGy/h, " << pressure
+				<< " hPa and alarm " << alarm << " into database." << std::endl;
 
-			storeResultInDatabase(measuredValue, pressure);
+			storeResultInDatabase(measuredValue, pressure, alarm);
 			updateRrdDatabase(measuredValue, pressure);
 
 			// Clean up the database connection, has to be out of scope
@@ -101,8 +102,8 @@ void Interface::readData() {
 		}
 		else
 			std::cout << CURR_TIME_STRING << "Ignoring measured values "
-				<< measuredValue << " nGy/h and " << pressure << " hPa."
-				<< std::endl;
+				<< measuredValue << " nGy/h, " << pressure << " hPa and alarm "
+				<< alarm << "." << std::endl;
 	}
 	else
 		std::cerr << CURR_TIME_STRING << bytes.constData();
@@ -150,7 +151,7 @@ void Interface::updateRrdDatabase(int gamma, double pressure) {
 	rrdProcess->start("rrdtool", arguments);
 }
 
-void Interface::storeResultInDatabase(int gamma, double pressure) {
+void Interface::storeResultInDatabase(int gamma, double pressure, int alarm) {
 	QSettings settings;
 	QSqlDatabase database = QSqlDatabase::addDatabase("QMYSQL", "log");
 
@@ -163,9 +164,10 @@ void Interface::storeResultInDatabase(int gamma, double pressure) {
 		qCritical() << "Failed to establish database connection:" << database.lastError().text();
 
 	QSqlQuery query(database);
-	query.prepare("INSERT INTO log (date, value, pressure) VALUES ( NOW(), :value, :pressure)");
+	query.prepare("INSERT INTO log (date, value, pressure, alarm) VALUES ( NOW(), :value, :pressure, :alarm)");
 	query.bindValue(":value", QVariant(gamma));
 	query.bindValue(":pressure", QVariant(pressure));
+	query.bindValue(":alarm", QVariant(alarm));
 	query.exec();
 
 	database.close();
