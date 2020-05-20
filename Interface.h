@@ -16,8 +16,9 @@ class Interface: public QObject {
 		QSerialPort *serialPort;
 		QSettings settings;
 		double getReducedAtmosphericPressure(double adout) const;
-		void updateRrdDatabase(int gamma, double pressure);
 		void storeResultInDatabase(int gamma, double pressure, int alarm);
+		void updateRrdDatabase(int gamma, double pressure);
+		void writeMetricsFile(int gamma, double pressure, int alarm);
 
 	private Q_SLOTS:
 		void handleSerialError(QSerialPort::SerialPortError error);

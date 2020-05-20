@@ -1,5 +1,7 @@
 #include <cmath>
+#include <fstream>
 #include <iostream>
+#include <string>
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -8,6 +10,7 @@
 #include <QProcess>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QString>
 #include <QStringList>
 #include <QVariant>
 #include <unistd.h>
@@ -96,6 +99,7 @@ void Interface::readData() {
 
 			storeResultInDatabase(measuredValue, pressure, alarm);
 			updateRrdDatabase(measuredValue, pressure);
+			writeMetricsFile(measuredValue, pressure, alarm);
 
 			// Clean up the database connection, has to be out of scope
 			QSqlDatabase::removeDatabase("log");
@@ -129,6 +133,28 @@ double Interface::getReducedAtmosphericPressure(double adout) const {
 				(R * (tempC + 273.15 + Ch * Ehat + a * altitude / 2)));
 }
 
+void Interface::storeResultInDatabase(int gamma, double pressure, int alarm) {
+	QSettings settings;
+	QSqlDatabase database = QSqlDatabase::addDatabase("QMYSQL", "log");
+
+	database.setHostName(settings.value("database/host").toString());
+	database.setDatabaseName(settings.value("database/database").toString());
+	database.setUserName(settings.value("database/username").toString());
+	database.setPassword(settings.value("database/password").toString());
+
+	if (!database.open())
+		qCritical() << "Failed to establish database connection:" << database.lastError().text();
+
+	QSqlQuery query(database);
+	query.prepare("INSERT INTO log (date, value, pressure, alarm) VALUES ( NOW(), :value, :pressure, :alarm)");
+	query.bindValue(":value", QVariant(gamma));
+	query.bindValue(":pressure", QVariant(pressure));
+	query.bindValue(":alarm", QVariant(alarm));
+	query.exec();
+
+	database.close();
+}
+
 void Interface::updateRrdDatabase(int gamma, double pressure) {
 	static QProcess *rrdProcess = Q_NULLPTR;
 
@@ -151,26 +177,30 @@ void Interface::updateRrdDatabase(int gamma, double pressure) {
 	rrdProcess->start("rrdtool", arguments);
 }
 
-void Interface::storeResultInDatabase(int gamma, double pressure, int alarm) {
-	QSettings settings;
-	QSqlDatabase database = QSqlDatabase::addDatabase("QMYSQL", "log");
+void Interface::writeMetricsFile(int gamma, double pressure, int alarm) {
+	std::string filename = "/home/gamma/gamma.prom";
+	std::ofstream metricsFile(filename);
 
-	database.setHostName(settings.value("database/host").toString());
-	database.setDatabaseName(settings.value("database/database").toString());
-	database.setUserName(settings.value("database/username").toString());
-	database.setPassword(settings.value("database/password").toString());
+	std::string name("gamma_radiation_nanogray");
+	std::string description("Gamma radiation in nanogray per hour");
+	metricsFile << "# HELP " << name << " " << description << "\n";
+	metricsFile << "# TYPE " << name << " gauge\n";
+	metricsFile << name << " " << gamma << "\n\n";
 
-	if (!database.open())
-		qCritical() << "Failed to establish database connection:" << database.lastError().text();
+	name = "gamma_atmospheric_pressure";
+	description = "Atmospheric pressure in hectopascal";
+	metricsFile << "# HELP " << name << " " << description << "\n";
+	metricsFile << "# TYPE " << name << " gauge\n";
+	metricsFile << name << " " << pressure << "\n\n";
 
-	QSqlQuery query(database);
-	query.prepare("INSERT INTO log (date, value, pressure, alarm) VALUES ( NOW(), :value, :pressure, :alarm)");
-	query.bindValue(":value", QVariant(gamma));
-	query.bindValue(":pressure", QVariant(pressure));
-	query.bindValue(":alarm", QVariant(alarm));
-	query.exec();
+	name = "gamma_alarm_signal";
+	description = "Alarm signal of the Monitor 414 unit";
+	metricsFile << "# HELP " << name << " " << description << "\n";
+	metricsFile << "# TYPE " << name << " gauge\n";
+	metricsFile << name << " " << alarm << "\n";
 
-	database.close();
+	qDebug() << "Writing metrics to " << QString::fromStdString(filename);
+	metricsFile.close();
 }
 
 void Interface::handleSerialError(QSerialPort::SerialPortError error) {
