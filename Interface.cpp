@@ -90,24 +90,16 @@ void Interface::readData() {
 	}
 
 	if (gammaOk && pressureOk && alarmOk) {
-		// The unit is broken and returns a second (empty) result imidiately
-		// after the first one, so we do a simple sanity check here
-		if (measuredValue > 0 && pressure > 800) {
-			std::cout << CURR_TIME_STRING << "Storing measured values "
-				<< measuredValue << " nGy/h, " << pressure
-				<< " hPa and alarm " << alarm << " into database." << std::endl;
+		std::cout << CURR_TIME_STRING << "Storing measured values "
+			<< measuredValue << " nGy/h, " << pressure
+			<< " hPa and alarm " << alarm << " into database." << "\n";
 
-			storeResultInDatabase(measuredValue, pressure, alarm);
-			updateRrdDatabase(measuredValue, pressure);
-			writeMetricsFile(measuredValue, pressure, alarm);
+		storeResultInDatabase(measuredValue, pressure, alarm);
+		updateRrdDatabase(measuredValue, pressure);
+		writeMetricsFile(measuredValue, pressure, alarm);
 
-			// Clean up the database connection, has to be out of scope
-			QSqlDatabase::removeDatabase("log");
-		}
-		else
-			std::cout << CURR_TIME_STRING << "Ignoring measured values "
-				<< measuredValue << " nGy/h, " << pressure << " hPa and alarm "
-				<< alarm << "." << std::endl;
+		// Clean up the database connection, has to be out of scope
+		QSqlDatabase::removeDatabase("log");
 	}
 	else
 		std::cerr << CURR_TIME_STRING << bytes.constData();
